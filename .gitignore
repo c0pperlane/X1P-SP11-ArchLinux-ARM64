@@ -1,0 +1,32 @@
+# Build artifacts (large disk images)
+build/
+*.img
+*.img.gz
+*.iso
+*.tar.gz
+*.tar.xz
+*.tar.zst
+
+# Kernel source (downloaded per build)
+src/linux-*/
+src/archlinuxarm-*/
+
+# Cache (downloaded tarballs)
+cache/
+
+# Flash logs (contain local paths)
+scripts/_flash_log*.txt
+
+# Symlinks (not followable on Windows filesystem)
+/rootfs
+kernel/modules/modules/*/build
+boot/modules/modules/*/build
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

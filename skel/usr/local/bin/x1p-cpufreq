@@ -1,0 +1,56 @@
+#!/bin/bash
+# x1p-cpufreq — CPU frequency governor control for Surface Pro 11 (X1E80100)
+# Usage: x1p-cpufreq [status|powersave|performance|ondemand|schedutil|conservative]
+
+GOVERNORS="/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"
+AVAIL="/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors"
+FREQ_CUR="/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+FREQ_MIN="/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq"
+FREQ_MAX="/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+
+cmd="${1:-status}"
+
+case "$cmd" in
+    status)
+        echo "=== CPU Frequency Status ==="
+        if [ -r "$AVAIL" ]; then
+            echo "Available governors: $(cat "$AVAIL")"
+        fi
+        if [ -r "$FREQ_MIN" ]; then
+            echo "Min freq: $(cat "$FREQ_MIN") kHz"
+            echo "Max freq: $(cat "$FREQ_MAX") kHz"
+            echo "Cur freq: $(cat "$FREQ_CUR") kHz"
+        fi
+        echo ""
+        echo "Per-CPU governor:"
+        for gov in $GOVERNORS; do
+            cpu=$(echo "$gov" | grep -oP 'cpu\K\d+')
+            val=$(cat "$gov" 2>/dev/null || echo "N/A")
+            printf "  CPU %-2s: %s\n" "$cpu" "$val"
+        done
+        ;;
+
+    powersave|performance|ondemand|schedutil|conservative)
+        if [ ! -w /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+            echo "Error: Cannot write to cpufreq sysfs. Run as root."
+            exit 1
+        fi
+        echo "Setting governor to: $cmd"
+        for gov in $GOVERNORS; do
+            echo "$cmd" > "$gov" 2>/dev/null || true
+        done
+        echo "Done. Run 'x1p-cpufreq status' to verify."
+        ;;
+
+    *)
+        echo "Usage: x1p-cpufreq [status|powersave|performance|ondemand|schedutil|conservative]"
+        echo ""
+        echo "Governors:"
+        echo "  powersave    — Lock at minimum frequency (coolest, slowest)"
+        echo "  conservative — Slow ramp-up, saves more battery than ondemand"
+        echo "  ondemand     — Scale up when CPU load is high"
+        echo "  schedutil    — Default. Scheduler-guided, energy-aware (recommended)"
+        echo "  performance  — Lock at maximum frequency (hot, fastest)"
+        exit 1
+        ;;
+esac

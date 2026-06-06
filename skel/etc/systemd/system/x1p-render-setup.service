@@ -1,0 +1,18 @@
+[Unit]
+Description=Surface Pro 11 Render Mode Setup
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=display-manager.service getty@tty1.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/x1p-render-setup.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# multi-user.target is the right anchor: the service must run before the display
+# manager starts, but sysinit.target is too early (display-manager.service is not
+# yet in scope). The Before= lines above enforce ordering within multi-user.target.
+WantedBy=multi-user.target
