@@ -17,7 +17,8 @@ OUT="$B/sp11-i3.img"
 MNT=/mnt/sp11root
 KVER="${KERNEL_VERSION:-6.17.0}-sp11"
 MIRROR=nj.us.mirror.archlinuxarm.org
-SIZE_MB=5120   # 5GB — auto-expands to full disk on first boot
+SIZE_MB=12288  # 12GB sparse — must fit base + 6.17 modules + all packages at
+               # build time; auto-expands to full disk on first boot (x1p-grow)
 
 MIRRORIP=$(getent hosts $MIRROR | awk '{print $1}' | head -1)
 [ -z "$MIRRORIP" ] && { echo "DNS failed for $MIRROR"; exit 1; }
