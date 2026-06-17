@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-# Auto-flash wrapper — no confirmation prompt, logs to _flash_log_ps.txt
+# Auto-flash wrapper - no confirmation prompt, logs to _flash_log_ps.txt
 
 $ErrorActionPreference = "Stop"
 $LogFile    = "$PSScriptRoot\_flash_log_ps.txt"
@@ -8,7 +8,7 @@ $DiskNumber = 1
 
 # Minimum USB size we expect (MB). A disk smaller than this is almost certainly
 # the wrong device (e.g. an SD card or an unrelated removable drive).
-$MinDiskSizeMB = 7500   # 7.5 GB — covers an 8 GB image with ~500 MB tolerance
+$MinDiskSizeMB = 7500   # 7.5 GB - covers an 8 GB image with ~500 MB tolerance
 
 function Log($msg) {
     $msg | Tee-Object -FilePath $LogFile -Append
@@ -47,7 +47,7 @@ try {
     Log "[!] Disk $DiskNumber not found."
     Log "    Available disks:"
     Get-Disk | ForEach-Object {
-        Log ("    Disk {0}: {1} ({2:N1} GB) — {3}" -f $_.Number, $_.FriendlyName,
+        Log ("    Disk {0}: {1} ({2:N1} GB) - {3}" -f $_.Number, $_.FriendlyName,
              ($_.Size / 1GB), $_.BusType)
     }
     Log ""
@@ -59,7 +59,7 @@ try {
 $DiskSizeGB  = [math]::Round($Disk.Size / 1GB, 1)
 $DiskSizeMB  = [math]::Round($Disk.Size / 1MB, 1)
 
-Log "  Disk  : Disk $DiskNumber — $($Disk.FriendlyName) (${DiskSizeGB} GB, Bus: $($Disk.BusType))"
+Log "  Disk  : Disk $DiskNumber - $($Disk.FriendlyName) (${DiskSizeGB} GB, Bus: $($Disk.BusType))"
 Log ""
 
 # Guard: disk must be removable or explicitly USB
@@ -71,9 +71,22 @@ if ($Disk.BusType -notin @("USB", "SD")) {
 
 # Guard: disk must be physically present (Online), not a Windows ghost device
 if ($Disk.OperationalStatus -ne "Online") {
-    Log "[!] SAFETY ABORT: Disk $DiskNumber is '$($Disk.OperationalStatus)' — not physically present."
-    Log "    Plug in the USB drive first."
-    exit 1
+    Log "[!] Disk $DiskNumber is '$($Disk.OperationalStatus)' - trying to bring online..."
+    try {
+        Set-Disk -Number $DiskNumber -IsOffline $false -ErrorAction Stop
+        Start-Sleep -Seconds 2
+        $Disk = Get-Disk -Number $DiskNumber -ErrorAction Stop
+        if ($Disk.OperationalStatus -ne "Online") {
+            Log "[!] SAFETY ABORT: Disk $DiskNumber is still '$($Disk.OperationalStatus)'."
+            Log "    Open Disk Management (diskmgmt.msc) and bring it online manually."
+            exit 1
+        }
+        Log "    Disk is now online."
+    } catch {
+        Log "[!] Could not bring disk $DiskNumber online: $_"
+        Log "    Open Disk Management (diskmgmt.msc) and bring it online manually."
+        exit 1
+    }
 }
 
 # Guard: verify disk is truly accessible by querying its partition style
@@ -84,7 +97,7 @@ try {
 Start-Sleep -Milliseconds 500
 $DiskRecheck = Get-Disk -Number $DiskNumber -ErrorAction SilentlyContinue
 if (-not $DiskRecheck -or $DiskRecheck.OperationalStatus -ne "Online") {
-    Log "[!] SAFETY ABORT: Disk $DiskNumber disappeared on recheck — ghost device detected."
+    Log "[!] SAFETY ABORT: Disk $DiskNumber disappeared on recheck - ghost device detected."
     Log "    Plug in the USB drive and try again."
     exit 1
 }
@@ -115,12 +128,13 @@ try { Set-Disk -Number $DiskNumber -IsOffline $true -ErrorAction SilentlyContinu
 Log "[*] Cleaning Disk $DiskNumber..."
 @"
 select disk $DiskNumber
-attributes disk clear readonly
 clean
-offline disk
 exit
 "@ | diskpart.exe | ForEach-Object {
-    if ($_ -match "(DiskPart|cleaned|succeeded|offline|error)") { Log "    $_" }
+    # Filter out the two expected VDS errors on already-offline disks
+    if ($_ -match "^(Microsoft DiskPart version|DISKPART>|DiskPart succeeded|Leaving DiskPart)") {
+        Log "    $_"
+    }
 }
 
 Start-Sleep -Seconds 2

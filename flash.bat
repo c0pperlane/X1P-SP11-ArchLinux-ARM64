@@ -3,16 +3,21 @@
 ::  Surface Pro 11 — Arch Linux USB Flasher
 ::
 ::  Double-click this file to:
-::    1. Request administrator rights
+::    1. Request administrator rights (UAC prompt — click Yes)
 ::    2. Show all connected drives
 ::    3. Let you pick a USB drive by number
-::    4. Flash the Arch Linux image to it
+::    4. Type "flash" to confirm
+::    5. WAIT — the flash takes 5-10 minutes.
+::       DO NOT CLOSE THE WINDOW during the flash, or the USB
+::       will be left in an unusable state and you will have to
+::       start over. The window's X button is disabled during
+::       the write to prevent accidental cancellation.
 ::
 ::  Requires: build\arch-x1p-usb.img  (built via WSL)
 :: ============================================================
 
 setlocal
-title Surface Pro 11 — USB Flasher
+title Surface Pro 11 - USB Flash - DO NOT CLOSE
 
 :: ── Auto-elevate to Administrator ────────────────────────────────────────────
 net session >nul 2>&1

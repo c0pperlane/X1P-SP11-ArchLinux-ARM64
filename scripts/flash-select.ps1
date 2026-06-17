@@ -15,6 +15,39 @@
 
 $ErrorActionPreference = "Stop"
 
+# ── Console close-button lock ─────────────────────────────────────────────────
+# Disables the X / Alt+F4 close during the flash so a stray click can't kill
+# a 5-10 minute write. Re-enabled in the finally block.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ConsoleWindow {
+    [DllImport("kernel32.dll")] private static extern IntPtr GetConsoleWindow();
+    [DllImport("user32.dll")]  private static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert);
+    [DllImport("user32.dll")]  private static extern bool DeleteMenu(IntPtr hMenu, uint uPosition, uint uFlags);
+    [DllImport("user32.dll")]  private static extern bool DrawMenuBar(IntPtr hWnd);
+    public static void DisableCloseButton() {
+        IntPtr h = GetConsoleWindow();
+        DeleteMenu(GetSystemMenu(h, false), 0xF060, 0x0000);  // SC_CLOSE, MF_BYCOMMAND
+        DrawMenuBar(h);
+    }
+    public static void EnableCloseButton() {
+        IntPtr h = GetConsoleWindow();
+        GetSystemMenu(h, true);   // revert -> restore default menu
+        DrawMenuBar(h);
+    }
+}
+'@
+
+# Belt-and-suspenders: also trap Ctrl+C so a stray ^C doesn't kill the write.
+$null = [Console]::CancelKeyPress.Add({
+    param($src, $e)
+    $e.Cancel = $true
+    Write-Host ""
+    Write-Host "  *** Ctrl+C ignored during flash. Wait for completion. ***" -ForegroundColor Yellow
+    Write-Host ""
+})
+
 # Locate image relative to this script's parent directory (repo root)
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $ImagePath = Join-Path $RepoRoot "build\arch-x1p-usb.img"
@@ -137,7 +170,29 @@ if ($confirm -ne "flash") {
     exit 0
 }
 
+# ── Lock the window and warn ──────────────────────────────────────────────────
+Clear-Host
+Write-Host "================================================================" -ForegroundColor Red
+Write-Host "  *** FLASH STARTING - DO NOT CLOSE THIS WINDOW ***" -ForegroundColor Red
+Write-Host "" -ForegroundColor Red
+Write-Host "  This takes 5-10 minutes. Closing the window leaves the" -ForegroundColor Red
+Write-Host "  USB drive UNUSABLE and you'll have to start over." -ForegroundColor Red
+Write-Host "" -ForegroundColor Red
+Write-Host "  The X button / Alt+F4 are disabled. Ctrl+C is ignored." -ForegroundColor Yellow
+Write-Host "  Just wait for the progress bar to reach 100%." -ForegroundColor Yellow
+Write-Host "================================================================" -ForegroundColor Red
 Write-Host ""
+
+[ConsoleWindow]::DisableCloseButton()
+# Closing `try`/`finally` later in this script always re-enables the close
+# button, but a `trap` here covers the case where a terminating error fires
+# outside the try/finally (e.g. the user closes via Task Manager / a hung
+# write that the .NET runtime kills). PowerShell's `trap` runs on every
+# terminating error in this script.
+trap {
+    try { [ConsoleWindow]::EnableCloseButton() } catch {}
+    continue
+}
 
 # ── Step 1: Offline + clean ────────────────────────────────────────────────────
 $DiskNumber = $selectedDisk.Number
@@ -237,6 +292,7 @@ try {
 } finally {
     if ($imgStream)  { $imgStream.Close() }
     if ($diskStream) { $diskStream.Close() }
+    [ConsoleWindow]::EnableCloseButton()
 }
 
 Write-Host ""

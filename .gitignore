@@ -17,6 +17,9 @@ cache/
 # Flash logs (contain local paths)
 scripts/_flash_log*.txt
 
+# Personal flash toolkit (machine-specific, never commit)
+personal-flash/
+
 # Symlinks (not followable on Windows filesystem)
 /rootfs
 kernel/modules/modules/*/build
