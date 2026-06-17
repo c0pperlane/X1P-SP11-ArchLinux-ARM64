@@ -41,7 +41,11 @@ trap 'sync; umount -R "$MNT" 2>/dev/null; losetup -d "$LOOP" 2>/dev/null' EXIT
 # ── [2/6] Extract rootfs + SP11 modules ──────────────────────────────────────
 echo "=== [2/6] Extract rootfs + SP11 kernel modules ==="
 bsdtar -xpf "$RTAR" -C "$MNT"
-tar xzf "$B/kernel-modules-${KVER}.tar.gz" -C "$MNT"
+# The modules tarball is rooted at lib/modules/... but the rootfs is usr-merged
+# (/lib -> usr/lib). --keep-directory-symlink makes tar extract THROUGH the
+# /lib symlink instead of replacing it with a real dir — otherwise
+# /lib/ld-linux-aarch64.so.1 disappears and the aarch64 chroot can't start.
+tar xzf "$B/kernel-modules-${KVER}.tar.gz" -C "$MNT" --keep-directory-symlink
 
 # ── [3/6] Base system config ─────────────────────────────────────────────────
 echo "=== [3/6] Base config ==="
