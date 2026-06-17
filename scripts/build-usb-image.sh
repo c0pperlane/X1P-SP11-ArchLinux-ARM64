@@ -311,17 +311,15 @@ GRT
 
 # mkinitcpio — SP11 PHY modules required for USB root mount
 sed -i 's/^MODULES=(.*/MODULES=(tcsrcc-x1e80100 phy-qcom-qmp-pcie phy-qcom-qmp-usb phy-qcom-qmp-usbc phy-qcom-eusb2-repeater phy-snps-eusb2 phy-qcom-qmp-combo surface-hid surface-aggregator surface-aggregator-registry surface-aggregator-hub)/' /etc/mkinitcpio.conf
-# /boot is just a mountpoint dir in the build chroot (the ESP is populated
-# later), so make sure it exists & is writable. Detect the actual kernel
-# version from the installed modules instead of hardcoding it.
+# The sp11-esp-guard pacman hook mounts the (read-only) ESP at /boot during
+# the -Syu transaction. Detach it so /boot is the writable rootfs dir again
+# (the ESP is populated separately in [6/6]); also avoids a mounted-ESP
+# corruption risk when [6/6] writes the partition. Then build the initramfs.
+umount /boot 2>/dev/null || true
 mkdir -p /boot
 KVER_REAL="$(ls -1 /usr/lib/modules/ | head -n1)"
 echo "Building initramfs for kernel: ${KVER_REAL}"
-# qemu-user does not honour root's access(W_OK) bypass, so mkinitcpio's
-# writability check on /boot (0755) fails. Generate into world-writable
-# /tmp (1777), then move the image into place.
-mkinitcpio -k "$KVER_REAL" -g /tmp/initramfs-sp11.img
-mv -f /tmp/initramfs-sp11.img /boot/initramfs-sp11.img
+mkinitcpio -k "$KVER_REAL" -g /boot/initramfs-sp11.img
 
 grep -q '^FONT=' /etc/vconsole.conf 2>/dev/null || echo FONT=ter-132n >> /etc/vconsole.conf
 pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'
