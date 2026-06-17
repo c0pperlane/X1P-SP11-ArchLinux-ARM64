@@ -34,8 +34,8 @@ jobs:
 
       - name: Download Arch Linux ARM RootFS
         run: |
-          mkdir -p cache
-          curl -L -o cache/archlinuxarm-aarch64-latest.tar.gz http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+          sudo mkdir -p cache
+          sudo curl -L -o cache/archlinuxarm-aarch64-latest.tar.gz http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
 
       - name: Build USB Image
         run: sudo bash scripts/build-usb-image.sh
