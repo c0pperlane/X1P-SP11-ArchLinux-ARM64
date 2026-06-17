@@ -48,7 +48,19 @@ jobs:
           echo "--- active aarch64 handler ---"
           sudo cat /proc/sys/fs/binfmt_misc/qemu-aarch64-sp11
 
+      # Cache the kernel outputs so iterations don't rebuild the kernel (~34 min)
+      # unless the kernel scripts/config change.
+      - name: Cache kernel build output
+        id: kcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/boot
+            build/kernel-modules-*.tar.gz
+          key: sp11-kernel-${{ hashFiles('scripts/build-kernel.sh', 'scripts/env.sh', 'configs/**') }}
+
       - name: Build Kernel
+        if: steps.kcache.outputs.cache-hit != 'true'
         run: sudo bash scripts/build-kernel.sh
 
       - name: Download Arch Linux ARM RootFS

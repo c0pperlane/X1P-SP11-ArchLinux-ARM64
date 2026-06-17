@@ -258,6 +258,9 @@ cat > "$MNT/root/chroot.sh" << 'CH'
 set -e
 export LANG=C
 rm -f /var/lib/pacman/db.lck
+# pacman 7's download sandbox (Landlock + 'alpm' user) is unsupported under
+# qemu-user emulation in this chroot; disable it so -Syu can sync/download.
+grep -q '^DisableSandbox' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -D --asexplicit linux-firmware mkinitcpio
