@@ -324,6 +324,9 @@ mkinitcpio -k "$KVER_REAL" -g /boot/initramfs-sp11.img
 grep -q '^FONT=' /etc/vconsole.conf 2>/dev/null || echo FONT=ter-132n >> /etc/vconsole.conf
 pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'
 ls -lh /boot/initramfs-sp11.img
+# pacman-key started a gpg-agent that keeps /dev busy and blocks unmounting
+# the rootfs after the chroot exits. Shut it down.
+gpgconf --kill all 2>/dev/null || true
 echo CH_OK
 CH
 
@@ -556,8 +559,16 @@ fatlabel "$EFI" X1P_BOOT 2>/dev/null || true
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 sync
-umount "$MNT/run" 2>/dev/null; umount -R "$MNT/dev"; umount -R "$MNT/sys"
-umount "$MNT/proc"; umount "$MNT"; losetup -d "$LOOP"; trap - EXIT
+# Kill anything still holding the rootfs (e.g. a lingering gpg-agent) so the
+# unmounts below don't fail with "target is busy", then unmount (lazy fallback).
+fuser -km "$MNT" 2>/dev/null || true
+sleep 1
+for m in "$MNT/run" "$MNT/dev" "$MNT/sys" "$MNT/proc" "$MNT"; do
+    umount -R "$m" 2>/dev/null || umount -Rl "$m" 2>/dev/null || true
+done
+sync
+losetup -d "$LOOP" 2>/dev/null || true
+trap - EXIT
 
 ls -lh "$OUT"
 echo "BUILD_SP11_DONE — flash: scripts/flash-usb.ps1"
