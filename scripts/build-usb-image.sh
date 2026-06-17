@@ -6,17 +6,18 @@
 # Output: /root/linux-surface-pro-11/build/sp11-i3.img (11GB, auto-expands on first boot)
 # Flash:  scripts/flash-usb.ps1 (Windows PowerShell, run as Administrator)
 
-exec > /root/build_sp11.log 2>&1
 set -e
 
+source "$(dirname "$0")/env.sh"
+
 # ── Config ───────────────────────────────────────────────────────────────────
-B=/root/linux-surface-pro-11/build
-RTAR=$B/rootfs.tar.gz
-OUT=$B/sp11-i3.img
+B="${BUILD_DIR:-/root/linux-surface-pro-11/build}"
+RTAR="${CACHE_DIR:-$B}/archlinuxarm-aarch64-latest.tar.gz"
+OUT="$B/sp11-i3.img"
 MNT=/mnt/sp11root
-KVER=6.17.0-sp11
+KVER="${KERNEL_VERSION:-6.17.0}-sp11"
 MIRROR=nj.us.mirror.archlinuxarm.org
-SIZE_MB=11264   # 11GB — auto-expands to full disk on first boot
+SIZE_MB=5120   # 5GB — auto-expands to full disk on first boot
 
 MIRRORIP=$(getent hosts $MIRROR | awk '{print $1}' | head -1)
 [ -z "$MIRRORIP" ] && { echo "DNS failed for $MIRROR"; exit 1; }
@@ -40,7 +41,7 @@ trap 'sync; umount -R "$MNT" 2>/dev/null; losetup -d "$LOOP" 2>/dev/null' EXIT
 # ── [2/6] Extract rootfs + SP11 modules ──────────────────────────────────────
 echo "=== [2/6] Extract rootfs + SP11 kernel modules ==="
 bsdtar -xpf "$RTAR" -C "$MNT"
-cp -a "$B/modules/lib/modules/$KVER" "$MNT/lib/modules/"
+tar xzf "$B/kernel-modules-${KVER}.tar.gz" -C "$MNT"
 
 # ── [3/6] Base system config ─────────────────────────────────────────────────
 echo "=== [3/6] Base config ==="
@@ -498,8 +499,8 @@ chown -R 1000:1000 "$H"
 echo "=== [6/6] Populate ESP ==="
 SDBOOT="$MNT/usr/lib/systemd/boot/efi/systemd-bootaa64.efi"
 IRD="$MNT/boot/initramfs-sp11.img"
-KIMG="$B/linux-sp11/arch/arm64/boot/Image"
-DENALI="$B/boot/dtbs/$KVER/qcom/x1e80100-microsoft-denali.dtb"
+KIMG="$B/boot/Image"
+DENALI="$B/boot/dtbs/x1e80100-microsoft-denali.dtb"
 
 for d in ::/EFI ::/EFI/BOOT ::/loader ::/loader/entries ::/dtbs ::/dtbs/qcom; do
     mmd -i "$EFI" "$d" 2>/dev/null || true

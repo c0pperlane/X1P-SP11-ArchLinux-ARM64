@@ -1,0 +1,48 @@
+name: Build SP11 Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/**'
+      - 'configs/**'
+      - '.github/workflows/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu make flex bison bc libssl-dev \
+            kmod cpio curl libarchive-tools gdisk dosfstools \
+            e2fsprogs qemu-user-static binfmt-support mtools \
+            rsync cloud-guest-utils
+          
+          # Ensure qemu-user-static is registered for aarch64 chroot
+          sudo systemctl restart systemd-binfmt
+
+      - name: Build Kernel
+        run: sudo bash scripts/build-kernel.sh
+
+      - name: Download Arch Linux ARM RootFS
+        run: |
+          mkdir -p cache
+          curl -L -o cache/archlinuxarm-aarch64-latest.tar.gz http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+
+      - name: Build USB Image
+        run: sudo bash scripts/build-usb-image.sh
+
+      - name: Upload Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sp11-i3-image
+          path: build/sp11-i3.img
+          compression-level: 1

@@ -12,7 +12,7 @@ KERNEL_SRC="${SRC_DIR}/linux-${KERNEL_VERSION}"
 KERNEL_TARBALL="linux-${KERNEL_VERSION}.tar.xz"
 KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v6.x/${KERNEL_TARBALL}"
 
-LOCALVERSION="-surface-pro11-x1p"
+LOCALVERSION="-sp11"
 
 echo "========================================"
 echo "  Kernel Build"
