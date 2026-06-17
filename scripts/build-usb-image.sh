@@ -100,7 +100,14 @@ sed -i 's/^#IgnorePkg.*/IgnorePkg = linux-aarch64 linux-aarch64-headers/' "$MNT/
 sed -i '/^\[options\]/a CacheDir = /tmp/pacman-pkg/\nCacheDir = /var/cache/pacman/pkg/' "$MNT/etc/pacman.conf"
 
 # Tools
-install -m755 /root/linux-surface-pro-11/sp11-grab-fw.sh "$MNT/usr/local/sbin/sp11-grab-fw"
+# Missing sp11-grab-fw.sh in git repository
+if [ -f "$PROJECT_ROOT/sp11-grab-fw.sh" ]; then
+    install -m755 "$PROJECT_ROOT/sp11-grab-fw.sh" "$MNT/usr/local/sbin/sp11-grab-fw"
+elif [ -f "$PROJECT_ROOT/scripts/sp11-grab-fw.sh" ]; then
+    install -m755 "$PROJECT_ROOT/scripts/sp11-grab-fw.sh" "$MNT/usr/local/sbin/sp11-grab-fw"
+else
+    echo "Warning: sp11-grab-fw.sh not found, skipping installation."
+fi
 
 # Compositor toggle
 cat > "$MNT/usr/local/bin/compositor" << 'EOF'
