@@ -23,11 +23,14 @@ jobs:
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu make flex bison bc libssl-dev \
             kmod cpio curl libarchive-tools gdisk dosfstools \
-            e2fsprogs qemu-user-static binfmt-support mtools \
+            e2fsprogs qemu-user-static mtools \
             rsync cloud-guest-utils
-          
-          # Ensure qemu-user-static is registered for aarch64 chroot
-          sudo systemctl restart systemd-binfmt
+
+      # Register the STATIC qemu-aarch64 with the F (fix-binary) flag so the
+      # aarch64 chroot works on the x86 runner. binfmt-support's dynamic
+      # aarch64-binfmt-P wrapper does NOT work inside a chroot.
+      - name: Set up QEMU binfmt (static, fix-binary)
+        uses: docker/setup-qemu-action@v3
 
       - name: Build Kernel
         run: sudo bash scripts/build-kernel.sh

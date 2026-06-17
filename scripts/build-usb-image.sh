@@ -310,7 +310,16 @@ pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'
 ls -lh /boot/initramfs-sp11.img
 echo CH_OK
 CH
+
+# Cross-arch chroot needs a static qemu inside the rootfs when binfmt lacks the
+# F (fix-binary) flag (x86 CI runners, some WSL setups). No-op on native aarch64.
+QEMU_STATIC="$(command -v qemu-aarch64-static || true)"
+[ -n "$QEMU_STATIC" ] && cp "$QEMU_STATIC" "$MNT/usr/bin/"
+
 chroot "$MNT" /bin/bash /root/chroot.sh
+
+# Don't ship the foreign qemu binary in the final image.
+[ -n "$QEMU_STATIC" ] && rm -f "$MNT/usr/bin/$(basename "$QEMU_STATIC")"
 
 # ── [5/6] User dotfiles ───────────────────────────────────────────────────────
 echo "=== [5/6] User dotfiles ==="
