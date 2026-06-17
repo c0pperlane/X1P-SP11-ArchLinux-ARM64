@@ -317,7 +317,11 @@ sed -i 's/^MODULES=(.*/MODULES=(tcsrcc-x1e80100 phy-qcom-qmp-pcie phy-qcom-qmp-u
 mkdir -p /boot
 KVER_REAL="$(ls -1 /usr/lib/modules/ | head -n1)"
 echo "Building initramfs for kernel: ${KVER_REAL}"
-mkinitcpio -k "$KVER_REAL" -g /boot/initramfs-sp11.img
+# qemu-user does not honour root's access(W_OK) bypass, so mkinitcpio's
+# writability check on /boot (0755) fails. Generate into world-writable
+# /tmp (1777), then move the image into place.
+mkinitcpio -k "$KVER_REAL" -g /tmp/initramfs-sp11.img
+mv -f /tmp/initramfs-sp11.img /boot/initramfs-sp11.img
 
 grep -q '^FONT=' /etc/vconsole.conf 2>/dev/null || echo FONT=ter-132n >> /etc/vconsole.conf
 pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'
