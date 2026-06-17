@@ -26,8 +26,12 @@ export IMAGE_OUTPUT="${BUILD_DIR}/arch-surface-pro11-x1p-live.img"
 export NATIVE_BUILD_DIR="/root/x1p-build"
 
 # Versions
-export KERNEL_VERSION="6.13"
-export KERNEL_BRANCH="v6.13"
+# The Surface Pro 11 needs the dwhinham SP11 kernel: it carries the
+# x1e80100-microsoft-denali DTB and X1E80100 patches that mainline lacks.
+export KERNEL_VERSION="6.17"
+export KERNEL_GIT_REPO="https://github.com/dwhinham/kernel-surface-pro-11"
+export KERNEL_GIT_BRANCH="wip/x1e80100-6.17-sp11"
+export KERNEL_BASE_CONFIG_URL="https://raw.githubusercontent.com/archlinuxarm/PKGBUILDs/master/core/linux-aarch64/config"
 export ALARM_ARCH="aarch64"
 export ALARM_MIRROR="http://os.archlinuxarm.org/os"
 export ALARM_TARBALL="ArchLinuxARM-aarch64-latest.tar.gz"

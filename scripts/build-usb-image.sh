@@ -310,7 +310,13 @@ GRT
 
 # mkinitcpio — SP11 PHY modules required for USB root mount
 sed -i 's/^MODULES=(.*/MODULES=(tcsrcc-x1e80100 phy-qcom-qmp-pcie phy-qcom-qmp-usb phy-qcom-qmp-usbc phy-qcom-eusb2-repeater phy-snps-eusb2 phy-qcom-qmp-combo surface-hid surface-aggregator surface-aggregator-registry surface-aggregator-hub)/' /etc/mkinitcpio.conf
-mkinitcpio -k 6.17.0-sp11 -g /boot/initramfs-sp11.img
+# /boot is just a mountpoint dir in the build chroot (the ESP is populated
+# later), so make sure it exists & is writable. Detect the actual kernel
+# version from the installed modules instead of hardcoding it.
+mkdir -p /boot
+KVER_REAL="$(ls -1 /usr/lib/modules/ | head -n1)"
+echo "Building initramfs for kernel: ${KVER_REAL}"
+mkinitcpio -k "$KVER_REAL" -g /boot/initramfs-sp11.img
 
 grep -q '^FONT=' /etc/vconsole.conf 2>/dev/null || echo FONT=ter-132n >> /etc/vconsole.conf
 pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Build Linux Kernel for Surface Pro 11 (Snapdragon X Plus / X1E80100)
+#
+# Uses the dwhinham SP11 kernel tree (x1e80100-microsoft-denali DTB + X1E80100
+# patches that mainline lacks), configured from the Arch Linux ARM base config
+# merged with our fragment — i.e. the proven SP11 build recipe.
 # =============================================================================
 
 set -euo pipefail
@@ -8,82 +12,71 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/env.sh"
 
-KERNEL_SRC="${SRC_DIR}/linux-${KERNEL_VERSION}"
-KERNEL_TARBALL="linux-${KERNEL_VERSION}.tar.xz"
-KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v6.x/${KERNEL_TARBALL}"
-
-LOCALVERSION="-sp11"
+KERNEL_SRC="${SRC_DIR}/linux-sp11"
+LOCALVERSION="-sp11"   # used only for the modules tarball filename
 
 echo "========================================"
-echo "  Kernel Build"
-echo "  Version: ${KERNEL_VERSION}${LOCALVERSION}"
+echo "  Kernel Build (SP11)"
+echo "  Repo:   ${KERNEL_GIT_REPO}"
+echo "  Branch: ${KERNEL_GIT_BRANCH}"
 echo "========================================"
 
-# Download kernel source if not present
+# Clone the SP11 kernel source (shallow, single branch)
 if [[ ! -d "$KERNEL_SRC" ]]; then
-    echo "[*] Downloading kernel ${KERNEL_VERSION}..."
-    mkdir -p "$SRC_DIR"
-    if [[ -f "${CACHE_DIR}/${KERNEL_TARBALL}" ]]; then
-        echo "[*] Using cached tarball"
-        cp "${CACHE_DIR}/${KERNEL_TARBALL}" "${SRC_DIR}/"
-    else
-        curl -L -o "${SRC_DIR}/${KERNEL_TARBALL}" "$KERNEL_URL"
-        cp "${SRC_DIR}/${KERNEL_TARBALL}" "${CACHE_DIR}/" 2>/dev/null || true
-    fi
-    echo "[*] Extracting..."
-    tar -xf "${SRC_DIR}/${KERNEL_TARBALL}" -C "$SRC_DIR"
+    echo "[*] Cloning SP11 kernel..."
+    git clone "$KERNEL_GIT_REPO" "$KERNEL_SRC" \
+        --single-branch --branch "$KERNEL_GIT_BRANCH" --depth 1
 fi
 
 cd "$KERNEL_SRC"
 
-# Create output directory
-mkdir -p "$KERNEL_BUILD_DIR"
+# Configure: Arch Linux ARM linux-aarch64 base config merged with our fragment,
+# then resolve the rest with olddefconfig. (merge_config.sh honours ARCH.)
+echo "[*] Fetching Arch Linux ARM base kernel config..."
+curl -Lo "${BUILD_DIR}/alarm_base_config" "$KERNEL_BASE_CONFIG_URL"
 
-# Configure kernel
-# Start with defconfig, then merge our fragment
-make O="$KERNEL_BUILD_DIR" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" defconfig
+echo "[*] Merging base config + project fragment..."
+ARCH="$ARCH" ./scripts/kconfig/merge_config.sh -O . -m \
+    "${BUILD_DIR}/alarm_base_config" \
+    "${CONFIGS_DIR}/kernel-config-fragment"
+make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 
-# Apply project config fragment
-if [[ -f "${CONFIGS_DIR}/kernel-config-fragment" ]]; then
-    echo "[*] Merging project config fragment..."
-    # Use olddefconfig after appending fragment
-    cat "${CONFIGS_DIR}/kernel-config-fragment" >> "${KERNEL_BUILD_DIR}/.config"
-    make O="$KERNEL_BUILD_DIR" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
-fi
-
-# Optionally apply patches
+# Optional project patches
 if [[ -d "${PROJECT_ROOT}/patches/kernel" ]]; then
     for patch in "${PROJECT_ROOT}"/patches/kernel/*.patch; do
-        if [[ -f "$patch" ]]; then
-            echo "[*] Applying patch: $(basename "$patch")"
-            patch -p1 --forward < "$patch" || echo "    (patch may already be applied or failed)"
-        fi
+        [[ -f "$patch" ]] || continue
+        echo "[*] Applying patch: $(basename "$patch")"
+        patch -p1 --forward < "$patch" || echo "    (already applied or failed)"
     done
 fi
 
-# Build kernel image, modules, and dtbs
-echo "[*] Building kernel..."
-make O="$KERNEL_BUILD_DIR" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j"$(nproc)" Image modules dtbs
+# Build kernel image, modules and dtbs (in-tree)
+echo "[*] Building kernel (this takes a while)..."
+make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" LOCALVERSION= -j"$(nproc)" Image modules dtbs
 
-# Install modules
-echo "[*] Installing modules to build dir..."
-make O="$KERNEL_BUILD_DIR" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="${KERNEL_BUILD_DIR}/modules_install" modules_install
+# Install modules into a staging dir
+echo "[*] Installing modules to staging dir..."
+MOD_STAGE="${KERNEL_BUILD_DIR}/modules_install"
+rm -rf "$MOD_STAGE"; mkdir -p "$MOD_STAGE"
+make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$MOD_STAGE" modules_install
 
-# Copy important outputs
+# Collect outputs consumed by build-usb-image.sh
 echo "[*] Collecting build artifacts..."
 mkdir -p "${BUILD_DIR}/boot"
-cp "${KERNEL_BUILD_DIR}/arch/arm64/boot/Image" "${BUILD_DIR}/boot/Image"
-cp -r "${KERNEL_BUILD_DIR}/arch/arm64/boot/dts/qcom" "${BUILD_DIR}/boot/dtbs" 2>/dev/null || true
+cp arch/arm64/boot/Image "${BUILD_DIR}/boot/Image"
+rm -rf "${BUILD_DIR}/boot/dtbs"
+cp -r arch/arm64/boot/dts/qcom "${BUILD_DIR}/boot/dtbs"
 
-# Create a tarball of modules for the rootfs
-cd "${KERNEL_BUILD_DIR}/modules_install"
+# Tarball of modules for the rootfs (name must match build-usb-image's KVER).
+cd "$MOD_STAGE"
 tar czf "${BUILD_DIR}/kernel-modules-${KERNEL_VERSION}${LOCALVERSION}.tar.gz" lib/
 
 echo ""
 echo "========================================"
 echo "  Kernel Build Complete!"
 echo "========================================"
-echo "  Kernel:      ${BUILD_DIR}/boot/Image"
-echo "  DTBs:        ${BUILD_DIR}/boot/dtbs/"
-echo "  Modules:     ${BUILD_DIR}/kernel-modules-*.tar.gz"
+echo "  Kernel:  ${BUILD_DIR}/boot/Image"
+echo "  DTBs:    ${BUILD_DIR}/boot/dtbs/  (incl. x1e80100-microsoft-denali.dtb)"
+echo "  Modules: ${BUILD_DIR}/kernel-modules-${KERNEL_VERSION}${LOCALVERSION}.tar.gz"
 echo "========================================"
+ls -1 "${BUILD_DIR}/boot/dtbs/" | grep -iE 'denali|romulus' || true
