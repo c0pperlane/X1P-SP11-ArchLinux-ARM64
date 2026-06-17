@@ -17,6 +17,11 @@ cache/
 # Flash logs (contain local paths)
 scripts/_flash_log*.txt
 
+# Protected-disk / locked-partition lists for X1P-SP11-Flash (hold hardware
+# ids / partition GUIDs; machine-specific, never commit)
+scripts/protected-disks.txt
+scripts/locked-partitions.txt
+
 # Personal flash toolkit (machine-specific, never commit)
 personal-flash/
 
