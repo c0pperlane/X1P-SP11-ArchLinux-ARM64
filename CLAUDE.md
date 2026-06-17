@@ -24,7 +24,7 @@ Surface Pro 11 (Snapdragon X Plus X1P-64-100, 10-core) booting Arch Linux ARM64 
 - **DTB**: x1e80100-microsoft-denali.dtb
 - **Desktop**: i3-wm + lightdm autologin as `alarm`
 - **Users**: alarm:alarm / root:root
-- **Boot entries**: sp11-plasma (default), sp11-console (recovery), sp11-efifb (no msm)
+- **Boot entries**: arch-x1p-console (default), arch-x1p-rescue, arch-x1p-gpu, arch-x1p-safe, arch-x1p-debug, arch-x1p-software, arch-x1p-powersave
 
 ## Key Scripts
 
@@ -52,7 +52,7 @@ Two modes:
 - `x1p-grow` is safe here: `growpart` only expands into trailing free space and respects partition boundaries — it cannot overwrite a preceding data partition. Target ext4 partition must be ≥ 7679MB.
 
 ## WSL Image Path
-`\\wsl$\<YOUR_DISTRO>\root\linux-surface-pro-11\build\sp11-plasma.img`
+`\\wsl$\<YOUR_DISTRO>\root\linux-surface-pro-11\build\sp11-i3.img`
 
 ## First Boot Checklist
 1. Auto-grow runs → disk expands to full size

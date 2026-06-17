@@ -3,7 +3,7 @@
 # Surface Pro 11 (Snapdragon X Plus X1P-64-100) with i3-wm
 # Run inside WSL2 Ubuntu as root
 #
-# Output: /root/linux-surface-pro-11/build/sp11-plasma.img (11GB, auto-expands on first boot)
+# Output: /root/linux-surface-pro-11/build/sp11-i3.img (11GB, auto-expands on first boot)
 # Flash:  scripts/flash-usb.ps1 (Windows PowerShell, run as Administrator)
 
 exec > /root/build_sp11.log 2>&1
@@ -12,7 +12,7 @@ set -e
 # ── Config ───────────────────────────────────────────────────────────────────
 B=/root/linux-surface-pro-11/build
 RTAR=$B/rootfs.tar.gz
-OUT=$B/sp11-plasma.img
+OUT=$B/sp11-i3.img
 MNT=/mnt/sp11root
 KVER=6.17.0-sp11
 MIRROR=nj.us.mirror.archlinuxarm.org
@@ -154,7 +154,7 @@ fi
 
 # Hardcoded correct content for every boot entry — no backup dir needed
 declare -A ENTRIES
-ENTRIES[sp11-plasma.conf]="title SP11 - i3 Desktop
+ENTRIES[sp11-i3.conf]="title SP11 - i3 Desktop
 linux /Image
 initrd /initramfs.img
 devicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb
@@ -172,7 +172,7 @@ initrd /initramfs.img
 devicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb
 options $CMN_OPT loglevel=7 modprobe.blacklist=msm systemd.unit=multi-user.target"
 
-LOADER="default sp11-plasma.conf
+LOADER="default sp11-i3.conf
 timeout 8
 console-mode max
 editor yes"
@@ -510,13 +510,13 @@ mcopy -i "$EFI" -D o -o "$IRD"    ::/initramfs.img
 mcopy -i "$EFI" -D o -o "$DENALI" ::/dtbs/qcom/x1e80100-microsoft-denali.dtb
 
 T=/tmp/esp_e; rm -rf "$T"; mkdir -p "$T/entries"
-printf 'default sp11-plasma.conf\ntimeout 8\nconsole-mode max\neditor yes\n' > "$T/loader.conf"
+printf 'default sp11-i3.conf\ntimeout 8\nconsole-mode max\neditor yes\n' > "$T/loader.conf"
 CMN="root=LABEL=ARCH_X1P_ROOT rw rootfstype=ext4 clk_ignore_unused pd_ignore_unused"
-printf 'title SP11 - i3 Desktop\nlinux /Image\ninitrd /initramfs.img\ndevicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb\noptions %s loglevel=4\n' "$CMN" > "$T/entries/sp11-plasma.conf"
+printf 'title SP11 - i3 Desktop\nlinux /Image\ninitrd /initramfs.img\ndevicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb\noptions %s loglevel=4\n' "$CMN" > "$T/entries/sp11-i3.conf"
 printf 'title SP11 - Console (recovery)\nlinux /Image\ninitrd /initramfs.img\ndevicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb\noptions %s loglevel=7 systemd.unit=multi-user.target\n' "$CMN" > "$T/entries/sp11-console.conf"
 printf 'title SP11 - efifb fallback\nlinux /Image\ninitrd /initramfs.img\ndevicetree /dtbs/qcom/x1e80100-microsoft-denali.dtb\noptions %s loglevel=7 modprobe.blacklist=msm systemd.unit=multi-user.target\n' "$CMN" > "$T/entries/sp11-efifb.conf"
 mcopy -i "$EFI" -D o -o "$T/loader.conf" ::/loader/loader.conf
-for e in sp11-plasma sp11-console sp11-efifb; do
+for e in sp11-i3 sp11-console sp11-efifb; do
     mcopy -i "$EFI" -D o -o "$T/entries/$e.conf" ::/loader/entries/$e.conf
 done
 fatlabel "$EFI" X1P_BOOT 2>/dev/null || true
