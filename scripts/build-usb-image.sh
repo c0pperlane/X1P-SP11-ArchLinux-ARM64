@@ -270,7 +270,6 @@ pacman -Rcuns --noconfirm linux-aarch64 || true
 pacman -Syu --noconfirm --needed \
   i3-wm i3status dunst picom rofi feh \
   xorg-server xorg-xinit xorg-xrdb xterm \
-  lightdm lightdm-gtk-greeter \
   firefox \
   mesa \
   ttf-dejavu noto-fonts \
@@ -279,35 +278,38 @@ pacman -Syu --noconfirm --needed \
   zram-generator \
   sudo git jq cabextract \
   gptfdisk cloud-guest-utils \
-  linux-firmware-qcom mkinitcpio \
+  linux-firmware-qcom linux-firmware-atheros mkinitcpio \
   terminus-font
 
 pacman -Scc --noconfirm || true
 
-systemctl enable NetworkManager lightdm x1p-grow sp11-esp-guard
+systemctl enable NetworkManager x1p-grow sp11-esp-guard
 systemctl enable systemd-zram-setup@zram0.service earlyoom
-systemctl set-default graphical.target
-systemctl disable sddm 2>/dev/null || true
+systemctl set-default multi-user.target
+systemctl disable sddm lightdm 2>/dev/null || true
+
+# Wi-Fi: drive the WCN7850/ath12k adapter via iwd so `iwctl` sees it, with
+# NetworkManager using iwd as its backend (so both work, no conflict).
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/wifi_backend.conf << 'NMW'
+[device]
+wifi.backend=iwd
+NMW
 
 echo 'root:root' | chpasswd
 echo 'alarm:alarm' | chpasswd
 usermod -aG wheel alarm 2>/dev/null || true
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 
-# lightdm autologin → i3
-mkdir -p /etc/lightdm
-cat > /etc/lightdm/lightdm.conf << 'LDM'
-[Seat:*]
-autologin-user=alarm
-autologin-user-timeout=0
-user-session=i3
-greeter-session=lightdm-gtk-greeter
-LDM
-cat > /etc/lightdm/lightdm-gtk-greeter.conf << 'GRT'
-[greeter]
-theme-name = Adwaita-dark
-font-name = DejaVu Sans 10
-GRT
+# Graphical session via tty autologin + startx. A display manager (lightdm)
+# races the GPU on the SP11 and fails with "GPU couldn't open display";
+# startx from an autologin tty is reliable. (.bash_profile launches it.)
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'GETTY'
+[Service]
+ExecStart=
+ExecStart=-/usr/bin/agetty --autologin alarm --noclear %I $TERM
+GETTY
 
 # mkinitcpio — SP11 PHY modules required for USB root mount
 sed -i 's/^MODULES=(.*/MODULES=(tcsrcc-x1e80100 phy-qcom-qmp-pcie phy-qcom-qmp-usb phy-qcom-qmp-usbc phy-qcom-eusb2-repeater phy-snps-eusb2 phy-qcom-qmp-combo surface-hid surface-aggregator surface-aggregator-registry surface-aggregator-hub)/' /etc/mkinitcpio.conf
@@ -322,7 +324,14 @@ echo "Building initramfs for kernel: ${KVER_REAL}"
 mkinitcpio -k "$KVER_REAL" -g /boot/initramfs-sp11.img
 
 grep -q '^FONT=' /etc/vconsole.conf 2>/dev/null || echo FONT=ter-132n >> /etc/vconsole.conf
-pacman -Q i3-wm lightdm firefox earlyoom profile-sync-daemon | sed 's/^/  /'
+echo "=== VERIFY: Wi-Fi (WCN7850 / ath12k) driver + firmware in image ==="
+find /usr/lib/modules -name 'ath12k*' | sed 's/^/  mod: /' | head || echo "  !! NO ath12k MODULE !!"
+if ls /lib/firmware/ath12k/WCN7850/hw2.0/* >/dev/null 2>&1; then
+  ls -la /lib/firmware/ath12k/WCN7850/hw2.0/ | sed 's/^/  fw: /'
+else
+  echo "  !! NO ath12k/WCN7850 FIRMWARE — iwctl will NOT see the adapter !!"
+fi
+pacman -Q i3-wm firefox iwd linux-firmware-atheros earlyoom profile-sync-daemon | sed 's/^/  /'
 ls -lh /boot/initramfs-sp11.img
 # pacman-key started a gpg-agent that keeps /dev busy and blocks unmounting
 # the rootfs after the chroot exits. Shut it down.
@@ -485,6 +494,14 @@ XRES
 
 printf '#!/bin/sh\nxrdb -merge ~/.Xresources\nsetxkbmap us\nexec i3\n' > "$H/.xinitrc"
 chmod +x "$H/.xinitrc"
+
+# Auto-start X on the autologin tty1 (replaces the display manager).
+cat > "$H/.bash_profile" << 'PROF'
+[[ -f ~/.bashrc ]] && . ~/.bashrc
+if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
+    exec startx
+fi
+PROF
 
 cat >> "$H/.bashrc" << 'BASH'
 alias cs='compositor stop'
