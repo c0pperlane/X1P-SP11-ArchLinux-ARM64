@@ -229,5 +229,5 @@ mdir -i "${WIN_IMAGE_FILE}@@$((512 * 2048))" "::loader/entries/" 2>/dev/null \
     | grep -i "\.conf" | awk '{print "    -", $NF}' || \
     ls -1 "$BOOT_SRC/loader/entries/" 2>/dev/null | sed 's/^/    - /' || true
 echo ""
-echo "  Next: flash with scripts/_autoflash.ps1 (Run as Admin)"
+echo "  Next: flash with X1P-SP11-Flash.bat (GUI, Run as Admin)"
 echo "========================================"

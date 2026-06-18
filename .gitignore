@@ -38,3 +38,9 @@ boot/modules/modules/*/build
 # OS
 .DS_Store
 Thumbs.db
+
+# Stale build artifacts removed from the repo (regenerated into build/ at
+# build time; proprietary firmware comes from pacman + sp11-grab-fw at runtime)
+/boot/
+/firmware/
+/kernel/

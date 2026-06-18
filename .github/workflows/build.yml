@@ -9,6 +9,8 @@ on:
       - 'scripts/**'
       - 'configs/**'
       - '.github/workflows/**'
+      - 'sp11-grab-fw.*'
+      - 'hooks/**'
 
 jobs:
   build:

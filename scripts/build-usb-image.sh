@@ -4,7 +4,7 @@
 # Run inside WSL2 Ubuntu as root
 #
 # Output: /root/linux-surface-pro-11/build/sp11-i3.img (11GB, auto-expands on first boot)
-# Flash:  scripts/flash-usb.ps1 (Windows PowerShell, run as Administrator)
+# Flash:  X1P-SP11-Flash.bat (Windows GUI flasher, run as Administrator)
 
 set -e
 
@@ -571,4 +571,4 @@ losetup -d "$LOOP" 2>/dev/null || true
 trap - EXIT
 
 ls -lh "$OUT"
-echo "BUILD_SP11_DONE — flash: scripts/flash-usb.ps1"
+echo "BUILD_SP11_DONE — flash: X1P-SP11-Flash.bat (GUI, partition mode)"
