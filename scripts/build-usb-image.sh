@@ -283,17 +283,23 @@ pacman -Syu --noconfirm --needed \
 
 pacman -Scc --noconfirm || true
 
-systemctl enable NetworkManager x1p-grow sp11-esp-guard
+systemctl enable NetworkManager iwd x1p-grow sp11-esp-guard
 systemctl enable systemd-zram-setup@zram0.service earlyoom
 systemctl set-default multi-user.target
 systemctl disable sddm lightdm 2>/dev/null || true
 
-# Wi-Fi: drive the WCN7850/ath12k adapter via iwd so `iwctl` sees it, with
-# NetworkManager using iwd as its backend (so both work, no conflict).
+# Wi-Fi via iwd so `iwctl` fully controls the WCN7850/ath12k adapter (iwd does
+# its own DHCP). NetworkManager keeps wired/USB ethernet but leaves Wi-Fi to
+# iwd, so there's no conflict.
+mkdir -p /etc/iwd
+cat > /etc/iwd/main.conf << 'IWD'
+[General]
+EnableNetworkConfiguration=true
+IWD
 mkdir -p /etc/NetworkManager/conf.d
-cat > /etc/NetworkManager/conf.d/wifi_backend.conf << 'NMW'
-[device]
-wifi.backend=iwd
+cat > /etc/NetworkManager/conf.d/unmanage-wifi.conf << 'NMW'
+[keyfile]
+unmanaged-devices=type:wifi
 NMW
 
 echo 'root:root' | chpasswd
@@ -495,9 +501,26 @@ XRES
 printf '#!/bin/sh\nxrdb -merge ~/.Xresources\nsetxkbmap us\nexec i3\n' > "$H/.xinitrc"
 chmod +x "$H/.xinitrc"
 
-# Auto-start X on the autologin tty1 (replaces the display manager).
+# tty1 autologin: on first boot let the user connect Wi-Fi via iwctl before
+# the desktop, then auto-start X (replaces the display manager).
 cat > "$H/.bash_profile" << 'PROF'
 [[ -f ~/.bashrc ]] && . ~/.bashrc
+
+if [[ $XDG_VTNR -eq 1 && ! -e ~/.config/sp11/wifi-done ]]; then
+    mkdir -p ~/.config/sp11
+    echo
+    echo "================= First boot: Wi-Fi setup ================="
+    echo " WCN7850 adapter. Connect, then type 'exit' to start i3."
+    echo " Hints:"
+    echo "   device list"
+    echo "   station wlan0 scan"
+    echo "   station wlan0 get-networks"
+    echo "   station wlan0 connect <SSID>"
+    echo "=========================================================="
+    sudo iwctl
+    touch ~/.config/sp11/wifi-done
+fi
+
 if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
     exec startx
 fi
