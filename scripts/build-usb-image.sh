@@ -506,19 +506,26 @@ chmod +x "$H/.xinitrc"
 cat > "$H/.bash_profile" << 'PROF'
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 
-if [[ $XDG_VTNR -eq 1 && ! -e ~/.config/sp11/wifi-done ]]; then
-    mkdir -p ~/.config/sp11
-    echo
-    echo "================= First boot: Wi-Fi setup ================="
-    echo " WCN7850 adapter. Connect, then type 'exit' to start i3."
-    echo " Hints:"
-    echo "   device list"
-    echo "   station wlan0 scan"
-    echo "   station wlan0 get-networks"
-    echo "   station wlan0 connect <SSID>"
-    echo "=========================================================="
-    sudo iwctl
-    touch ~/.config/sp11/wifi-done
+# tty1: if there's no internet yet, offer iwctl to connect Wi-Fi; if we're
+# already online (ethernet, or iwd auto-reconnected), skip straight to the
+# desktop. Retry a few seconds so iwd auto-connect has a chance first.
+if [[ $XDG_VTNR -eq 1 ]]; then
+    online=0
+    for _ in 1 2 3 4 5; do
+        ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && { online=1; break; }
+        sleep 1
+    done
+    if [[ $online -eq 0 ]]; then
+        echo
+        echo "=========== No internet — Wi-Fi setup (WCN7850) ==========="
+        echo " Connect, then type 'exit' to continue to the desktop:"
+        echo "   device list"
+        echo "   station wlan0 scan"
+        echo "   station wlan0 get-networks"
+        echo "   station wlan0 connect <SSID>"
+        echo "==========================================================="
+        sudo iwctl
+    fi
 fi
 
 if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
