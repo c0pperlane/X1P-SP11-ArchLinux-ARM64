@@ -1,188 +1,108 @@
-# Arch Linux ARM64 for Surface Pro 11 (Snapdragon X Plus 10-Core)
+# Arch Linux ARM64 for Surface Pro 11 (Snapdragon X Plus, 10-Core)
 
-> **Experimental Native Port** for Microsoft Surface Pro 11 powered by the Qualcomm Snapdragon X Plus (X1P-64-100 / 10-core Oryon) with full iGPU (Adreno X1-85) acceleration support and secondary CPU software rendering fallback.
+Native Arch Linux ARM64 for the Microsoft **Surface Pro 11** (Qualcomm Snapdragon
+X Plus **X1P-64-100** / X1E80100, Adreno X1-85). Boots from USB or an external
+NVMe; can live alongside your data via partition-mode flashing.
 
-## Overview
+> Bringup project — expect rough edges. See `CLAUDE.md` for the detailed,
+> always-current project notes.
 
-This project provides a complete build system to create a bootable USB stick that runs Arch Linux natively on the Surface Pro 11 ARM64 platform. **All Qualcomm firmware has been extracted directly from the Windows driver store on this device** — no external firmware sources are used.
+## What you get
 
-### Key Features
+- **Kernel `6.17.0-sp11`** from [dwhinham/kernel-surface-pro-11](https://github.com/dwhinham/kernel-surface-pro-11)
+  (`wip/x1e80100-6.17-sp11`) — carries the `x1e80100-microsoft-denali` DTB and the
+  X1E80100/Surface-Aggregator patches that mainline lacks. (Mainline has only the
+  Surface *Laptop 7* "romulus" DTBs, which is why a plain kernel.org build
+  black-screens on the Pro 11.)
+- **i3-wm** desktop (autologin as `alarm`)
+- **Surface Aggregator** drivers (keyboard cover / touch) as modules
+- **Firmware** via `linux-firmware-qcom` (build time) + `sp11-grab-fw` (runtime)
 
-- **Linux Kernel 6.13+** with Snapdragon X1E80100 / X1P-64-100 device tree support
-- **Adreno X1-85 iGPU acceleration** via Mesa Freedreno (Turnip Vulkan + OpenGL ES)
-- **Bootloader selection** between GPU hardware acceleration and software rendering (LLVMpipe)
-- **Live USB + Installer** — boot directly from USB or install to internal NVMe
-- **Dual-boot friendly** — does not touch internal storage unless explicitly installed
-- **Local firmware extraction** — GPU, Wi-Fi, Bluetooth, DSP, Camera, Video firmware from Windows DriverStore
+## Build
 
-## Project Structure
+The image is built by **GitHub Actions** (`.github/workflows/build.yml`) and
+uploaded as the artifact **`sp11-i3-image`** (`sp11-i3.img`, ~12 GB sparse). Push
+to `main` (touching `scripts/`, `configs/`, `sp11-grab-fw.*`, `hooks/`, or the
+workflow) or run it manually via *Actions → Build SP11 Image → Run workflow*.
+
+To build locally (Linux / WSL2, as root):
+
+```bash
+sudo bash scripts/build-kernel.sh      # clones + builds the SP11 6.17 kernel
+sudo bash scripts/build-usb-image.sh   # -> build/sp11-i3.img
+```
+
+`build-usb-image.sh` is self-contained: it creates the GPT image, extracts the
+Arch Linux ARM rootfs, chroots in (via qemu when cross-building) to install i3 /
+packages and the initramfs, and populates the ESP.
+
+## Flash
+
+Use the Windows GUI flasher (run as Administrator):
+
+```
+X1P-SP11-Flash.bat
+```
+
+- **Whole-disk mode** — for a blank USB stick: wipes the disk, writes the full image.
+- **Partition mode** — writes only into chosen target partitions (ESP + ext4 root),
+  leaving every other partition untouched. This is how Linux goes onto an external
+  NVMe alongside your data. Lock your data partition (shown red), pick ESP/root
+  targets, then *Set GPT types*. See `CLAUDE.md` → "Flash safety" for the details.
+
+> The old CLI flashers are archived in `archive/old-flash-scripts.DO-NOT-RUN.zip`
+> and must not be run — they did whole-disk `diskpart clean` + dd.
+
+## First boot
+
+1. Auto-grow expands the root partition to fill the disk.
+2. i3 starts (login `alarm` / `alarm`; root `root` / `root`).
+3. Plug in a USB-C Ethernet adapter, then: `sudo sp11-grab-fw`
+   (fetches the Qualcomm display/DSP firmware for the Denali board).
+4. Reboot → Wi-Fi (WCN7850 / ath12k) works.
+
+> Booting from a **USB-attached** NVMe is treated as non-NVMe, so `sp11-grab-fw`
+> leaves the **ADSP** firmware as `adsp_dtb.mbn.disabled` on purpose — enabling it
+> on a USB boot can hang startup. Only rename it to `.mbn` on an **internally**
+> attached NVMe.
+
+### Boot entries (systemd-boot)
+
+| Entry | Notes |
+|-------|-------|
+| `sp11-i3` (default) | normal graphical boot |
+| `sp11-console` | multi-user (no X), recovery |
+| `sp11-efifb` | `modprobe.blacklist=msm`, EFI framebuffer fallback |
+
+Kernel cmdline keeps `clk_ignore_unused pd_ignore_unused` (required) and
+`root=LABEL=ARCH_X1P_ROOT`.
+
+## Repo layout
 
 ```
 .
-├── build/                          # Build artifacts (images, kernels, tarballs)
-├── cache/                          # Downloaded tarballs
-├── configs/                        # Bootloader, kernel, and initramfs configs
-│   ├── kernel-config-fragment      # Extra kernel options for X1P/X1E
-│   ├── mkinitcpio.conf             # Initramfs generation config
-│   └── systemd-boot/               # Bootloader entries
-│       ├── loader.conf
-│       └── entries/
-│           ├── arch-x1p-gpu.conf       # GPU Accelerated
-│           ├── arch-x1p-software.conf  # Software Rendering
-│           ├── arch-x1p-safe.conf      # Safe Mode
-│           └── arch-x1p-debug.conf     # Debug Shell
-├── docs/                           # Additional documentation
-├── firmware/                       # Extracted Qualcomm firmware
-│   └── qcom/x1e80100/
-│       ├── adsp/                   # Audio DSP firmware + libs
-│       ├── bt/                     # Bluetooth firmware
-│       ├── camera/                 # Camera ISP firmware
-│       ├── cdsp/                   # Compute DSP firmware
-│       ├── gpu/                    # GPU/Display microcode
-│       ├── video/                  # Video encoder/decoder
-│       └── wlan/                   # Wi-Fi board data + firmware
-├── patches/                        # Kernel and Mesa patches (if needed)
-├── scripts/                        # Build automation
-│   ├── build-all.sh                # Master build pipeline
-│   ├── build-kernel.sh             # Download, configure, build kernel
-│   ├── build-rootfs.sh             # Assemble Arch Linux ARM rootfs
-│   ├── build-initramfs.sh          # Build initramfs
-│   ├── build-usb-image.sh          # Generate flashable USB image
-│   ├── extract-firmware.sh         # Extract firmware from Windows
-│   └── flash-usb.sh                # Flash image to USB device
-├── skel/                           # Skeleton files overlay for rootfs
-│   ├── etc/
-│   │   ├── dracut.conf.d/x1p.conf
-│   │   ├── modprobe.d/x1p-gpu.conf
-│   │   ├── profile.d/x1p-render.sh
-│   │   ├── systemd/system/x1p-render-setup.service
-│   │   └── X11/xorg.conf.d/20-gpu.conf
-│   └── usr/local/bin/
-│       ├── install-to-nvme.sh      # Internal SSD installer
-│       └── x1p-render-setup.sh     # GPU/SW render boot config
-└── README.md                       # This file
+├── .github/workflows/build.yml   # CI: builds + uploads sp11-i3.img
+├── scripts/
+│   ├── build-kernel.sh           # clone + build the dwhinham SP11 6.17 kernel
+│   ├── build-usb-image.sh        # build the full bootable image
+│   ├── env.sh                    # shared build config
+│   ├── X1P-SP11-Flash.ps1        # WinForms backend for the GUI flasher
+│   └── read-ext4.* / readpath.*  # Windows helpers to peek at ext4 partitions
+├── configs/kernel-config-fragment # merged onto the ALARM linux-aarch64 config
+├── hooks/                        # pacman hooks (ESP/dtb upkeep)
+├── skel/                         # optional rootfs overlay configs
+├── sp11-grab-fw.{sh,bat}         # runtime Qualcomm firmware grabber
+├── X1P-SP11-Flash.bat            # the flasher (double-click)
+├── archive/                      # zipped old CLI flashers (do not run)
+└── CLAUDE.md                     # detailed project notes
 ```
 
-## Quick Start
-
-### Prerequisites
-
-You need a **Linux build environment** (WSL2, VM, or native ARM64 machine) with:
-
-- `aarch64-linux-gnu-gcc` (cross-compiler) **or** native ARM64 toolchain
-- `bc`, `bison`, `flex`, `openssl`, `libssl-dev`
-- `dtc` (device tree compiler)
-- `sfdisk`, `mkfs.fat`, `mkfs.ext4`, `parted`
-- `arch-install-scripts` (for `arch-chroot`)
-
-> **Windows Users:** Run these scripts inside **WSL2 (Ubuntu/Arch)**. MSYS2 alone cannot build the Linux kernel.
-
-### 1. Extract Firmware (already done on this device!)
-
-```bash
-./scripts/extract-firmware.sh
-```
-
-**Result:** All Qualcomm firmware is now in `firmware/qcom/x1e80100/` — GPU, Wi-Fi (WCN785x), Bluetooth, ADSP, CDSP, camera, video.
-
-### 2. Build Everything
-
-```bash
-./scripts/build-all.sh [image_size]
-# Example:
-./scripts/build-all.sh 16G
-```
-
-This runs the full pipeline:
-1. Extract firmware
-2. Build kernel (`Image.gz` + modules + DTBs)
-3. Build rootfs (Arch Linux ARM aarch64 + Mesa + packages)
-4. Build initramfs
-5. Assemble USB disk image
-
-### 3. Flash to USB
-
-```bash
-# List your USB device first
-lsblk
-
-# Flash it (DESTRUCTIVE — triple-check the device!)
-sudo ./scripts/flash-usb.sh /dev/sdX
-```
-
-## Bootloader Menu
-
-When booting the USB on Surface Pro 11, **systemd-boot** presents:
-
-| Entry | Description |
-|-------|-------------|
-| **Arch Linux ARM — GPU Accelerated** | Full Adreno X1-85 hardware acceleration via Mesa Freedreno |
-| **Arch Linux ARM — Software Rendering** | MSM display driver loaded, but Mesa forced to LLVMpipe |
-| **Arch Linux ARM — Safe Mode** | GPU kernel modules blacklisted; simpledrm fallback + LLVMpipe |
-| **Arch Linux ARM — Debug Shell** | Early debug shell with verbose logging |
-
-**Boot method:** Hold **Volume Down + Power** on the Surface to access the UEFI boot menu, select USB.
-
-## GPU vs Software Rendering
-
-The Surface Pro 11's Adreno X1-85 is supported in kernel ≥6.11 and Mesa ≥24.2. During bringup:
-
-1. **GPU Accelerated** — Kernel loads `msm` → Mesa uses `freedreno` (OpenGL) / `turnip` (Vulkan)
-2. **Software Rendering** — Kernel loads `msm` for display → Mesa uses `llvmpipe` via `LIBGL_ALWAYS_SOFTWARE=1`
-3. **Safe Mode** — `msm` blacklisted → `simpledrm` provides framebuffer → Mesa `llvmpipe`
-
-The `x1p-render-setup.service` runs at boot, reads the `x1p.render=` kernel parameter, and configures X11/Wayland/Mesa accordingly. Logs are saved to `/var/log/x1p-render.log`.
-
-## Installing to Internal NVMe
-
-Once the live USB is running stably:
-
-```bash
-sudo install-to-nvme
-```
-
-This interactively:
-- Partitions the NVMe (GPT: ESP, Boot, Root)
-- Copies the rootfs and kernel
-- Installs systemd-boot
-- Supports **dual-boot with Windows** (manual partition option)
-
-## Firmware Inventory (Extracted from Windows DriverStore)
-
-| Subsystem | Files | Key Components |
-|-----------|-------|----------------|
-| **GPU/Display** | `qcdxkmbase8380.bin`, `qcdxkmsuc8380.mbn`, `qcvss8380.mbn`, `qcav1e8380.mbn` | GPU ucode, video subsystem, AV1 encoder |
-| **Wi-Fi** | `wlanfw20.mbn`, `bdwlan*.elf`, `phy_ucode20.elf` | WCN785x firmware, board data |
-| **Bluetooth** | `bsrc_bt.bin`, `hmtnv20.bin` | BT controller firmware |
-| **ADSP** | `qcadsp8380.mbn`, `adspr.jsn`, `adsp_dtbs.elf` + 40+ libs | Audio DSP + codec modules |
-| **CDSP** | `qccdsp8380.mbn` | Compute DSP |
-| **Camera** | `CAMERA_ICP.mbn`, `C*.bin`, `IR*.bin` | ISP firmware |
-| **Video** | `evass.mbn` | EVA/video accelerator |
-
-Total: **126 files, ~80MB** extracted directly from `C:\Windows\System32\DriverStore\FileRepository\`.
-
-## Development Workflow
-
-1. **Iterate locally** in this project directory
-2. **Rebuild** kernel/rootfs as needed (`./scripts/build-kernel.sh`, etc.)
-3. **Regenerate** the USB image (`./scripts/build-usb-image.sh`)
-4. **Flash and test** on the Surface Pro 11
-5. **Capture logs** (`journalctl`, `dmesg`, `/var/log/x1p-render.log`) and refine
-
-## Known Issues & Notes
-
-- **UEFI Secure Boot:** Must be disabled on Surface Pro 11 to boot custom kernels.
-- **Device Tree:** X1P-64-100 uses the X1E80100 device tree family. DTB is selected automatically.
-- **Firmware formats:** Some Windows `.mbn`/`.bin` files may require format conversion or specific Linux driver support to load. This is a bringup project — expect trial and error.
-- **Audio:** DSP audio support is experimental; expect HDMI/DP audio before onboard speakers.
-
-## Resources
-
-- [Arch Linux ARM](https://archlinuxarm.org/)
-- [Linux Kernel — Qualcomm X1E80100](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/boot/dts/qcom/x1e80100.dtsi)
-- [Mesa Freedreno Wiki](https://docs.mesa3d.org/drivers/freedreno.html)
-- [Surface Pro 11 UEFI Boot](https://learn.microsoft.com/surface/secure-boot)
+Firmware blobs and build artifacts are **not** committed (gitignored); the kernel
+build regenerates them and `sp11-grab-fw` fetches the proprietary firmware at
+runtime.
 
 ## License
 
-This project scaffolding is provided as-is for educational and development purposes. Arch Linux ARM and the Linux kernel are governed by their respective licenses. Firmware files extracted from Windows are property of Qualcomm/Microsoft and are used here solely for hardware enablement on the device they were originally installed on.
+Scaffolding provided as-is for development/education. Arch Linux ARM and the Linux
+kernel are under their respective licenses. Qualcomm/Microsoft firmware is fetched
+on-device for the hardware it shipped on and is not redistributed here.
